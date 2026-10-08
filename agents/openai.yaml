@@ -1,0 +1,4 @@
+interface:
+  display_name: "uni-app 预渲染虚拟列表"
+  short_description: "通过同宽预渲染建立类型高度表，简化 uni-app 长列表与分组滚动接入"
+  default_prompt: "使用 $uni-app-prerender-virtual-list 判断当前列表的高度版式，通过预渲染接入虚拟列表，并验证滚动和生命周期行为。"
