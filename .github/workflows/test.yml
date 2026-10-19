@@ -15,5 +15,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run controller and adapter tests
-        run: node --test tests/controller.test.mjs tests/adapter.test.mjs
+      - name: Run skill tests
+        run: node --test tests/*.test.mjs

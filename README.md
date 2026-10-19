@@ -34,13 +34,15 @@ git clone https://github.com/Saltedfish117/uni-app-prerender-virtual-list.git
 
 ## 直接使用模板
 
-1. 复制 [控制器](assets/virtual-list-controller.js) 和 [适配工具](assets/uni-list-adapter.js) 到项目。
+1. 复制 [控制器](assets/virtual-list-controller.js) 和 [适配工具](assets/uni-list-adapter.js)；容器模板另需 [原生滚动同步工具](assets/scroll-view-sync.js)。
 2. 根据滚动方式选择 [页面滚动模板](assets/page-scroll-example.md) 或 [scroll-view 模板](assets/scroll-view-example.md)。只提取其中完整的 `vue` 代码块，分别保存为 `PageScrollExample.vue` 或 `ScrollViewExample.vue`。
-3. 将两个 JS 文件与组件放在同目录，或调整导入路径；按项目约定注册页面路由，再用实际数据替换合成示例。
+3. 将模板导入的 JS 文件与组件放在同目录，或调整导入路径；按项目约定注册页面路由，再用实际数据替换合成示例。
 
 示例保存为 Markdown，便于上传仅接受文本资源的技能平台。不要将 `.md` 文件直接作为 Vue 组件导入，也不要把说明和代码围栏复制进组件。`assets/package.json` 只声明技能测试所需的 ES Module 范围，不复制到应用。
 
-虚拟行的定位样式在窗口发布时预计算为 `node.style`，模板直接绑定该字段。接入时保留这一方式，避免在 `v-for` 中调用行级样式方法。
+样本放在正式列表包含块中继承宽度，隐藏但保留自然高度。窗口发布时用 `buildKeyedWindow` 生成稳定 key 数组与内容映射，模板直接绑定 `visibleNodes[nodeKey].style`；避免行级样式方法，以及对象数组增量更新与原生节点复用错配。
+
+容器模板还演示筛选先确认原生回顶再替换数据，以及事件静默/触底后的有界位置校正。快速滑动空白需同时检查实际节点几何与截图，不能只看 JS 可见范围。
 
 ## 文档
 
@@ -51,18 +53,20 @@ git clone https://github.com/Saltedfish117/uni-app-prerender-virtual-list.git
 | [分类高度列表](references/typed-list.md) | 高度类型、样本与布局失效 |
 | [分组吸顶与跳转](references/grouped-list.md) | 分组锚点、尾部补高和选择状态 |
 | [接入与验证](references/integration.md) | 滚动坐标、异步测量和生命周期 |
+| [空白诊断与原生验收](references/scroll-blank-diagnosis.md) | 末次事件滞后、节点错位、筛选回顶与验收矩阵 |
+| [更新日志](CHANGELOG.md) | 本次改动、兼容说明和验证边界 |
 
-默认上下各 3 屏缓冲、150ms 节流，均可配置。模板保留窗口边缘即时补充、尾次读取最新位置及窗口不变时复用数组。
+默认上下各 3 屏缓冲、150ms 节流，均可配置。控制器保留窗口边缘即时补充、尾次使用最新已收到位置及窗口不变时复用数组；原生同步工具补充实际位置回读。
 
 ## 运行测试
 
 使用 Node.js 22 或更新版本，在仓库根目录运行：
 
 ```bash
-node --test tests/controller.test.mjs tests/adapter.test.mjs
+node --test tests/*.test.mjs
 ```
 
-测试使用 Node 内置工具，无需安装 npm 依赖。覆盖空列表、大列表、窗口边界、分组锚点、节流、原子更新、坐标换算、测量竞态与生命周期清理。GitHub Actions 执行相同测试。
+测试使用 Node 内置工具，无需安装 npm 依赖。覆盖控制器、测量竞态、key 编码/窗口映射、原生回读、连续筛选与超时取消，并提取两个模板的实际脚本运行合成接入测试。GitHub Actions 执行相同测试。
 
 这些自动化检查验证纯 JavaScript 逻辑和模拟接入行为。小程序、App 的原生排版与真机滚动性能仍需在目标平台验证。
 

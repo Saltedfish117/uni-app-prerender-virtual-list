@@ -2,7 +2,7 @@
 
 为兼容只接受文本资源的技能平台，完整 Vue 单文件组件保存在下面的代码块中。
 
-接入时仅提取 `vue` 代码块内容，保存为 `PageScrollExample.vue`；不要把说明、代码围栏或本 Markdown 文件作为组件导入。将 `virtual-list-controller.js`、`uni-list-adapter.js` 放在组件同目录，或相应调整导入路径，并按项目约定注册页面路由。示例中的条目均为合成数据。示例在窗口发布时把 `rect` 转成 `style` 字段，模板不调用行级定位样式函数。
+接入时仅提取 `vue` 代码块内容，保存为 `PageScrollExample.vue`；不要把说明、代码围栏或本 Markdown 文件作为组件导入。将 `virtual-list-controller.js`、`uni-list-adapter.js` 放在组件同目录，或相应调整导入路径，并按项目约定注册页面路由。示例中的条目均为合成数据。窗口发布时生成 key 数组与节点映射，预计算 style 后按 key 直接绑定；样本在列表内部继承同宽。
 
 ```vue
 <template>
@@ -18,26 +18,27 @@
             <text>{{ layoutError || (layoutReady ? '已加载 ' + itemCount + ' 行' : '正在测量布局…') }}</text>
         </view>
         <view id="page-list" class="virtual-list" :style="listStyle">
+            <view v-if="measureItem" class="measurement" aria-hidden="true">
+                <view id="page-row-sample" class="example-row"><text>{{ measureItem.text }}</text></view>
+            </view>
             <view v-if="layoutReady">
                 <view
-                    v-for="node in visibleList"
-                    :key="node.key"
+                    v-for="nodeKey in visibleKeys"
+                    :key="nodeKey"
+                    :data-node-key="nodeKey"
                     class="virtual-node"
-                    :style="node.style"
+                    :style="visibleNodes[nodeKey].style"
                 >
-                    <view class="example-row"><text>{{ node.data.text }}</text></view>
+                    <view class="example-row"><text>{{ visibleNodes[nodeKey].data.text }}</text></view>
                 </view>
             </view>
-        </view>
-        <view v-if="measureItem" class="measurement" aria-hidden="true">
-            <view id="page-row-sample" class="example-row"><text>{{ measureItem.text }}</text></view>
         </view>
     </view>
 </template>
 
 <script>
 import { createVirtualListController } from './virtual-list-controller.js';
-import { createUniListAdapter, readPageLayout } from './uni-list-adapter.js';
+import { buildKeyedWindow, createUniListAdapter, readPageLayout } from './uni-list-adapter.js';
 
 // Synthetic example data. Stable keys never come from the visible array index.
 const makeRows = (start, count) => Array.from({ length: count }, (_, offset) => {
@@ -45,16 +46,10 @@ const makeRows = (start, count) => Array.from({ length: count }, (_, offset) => 
     return { key: `synthetic-${number}`, data: { text: `合成条目 ${number}` } };
 });
 
-// 只在可见窗口发布时生成定位样式；不要在 v-for 的 :style 中调用方法。
-const withPositionStyle = (node) => ({
-    ...node,
-    style: `height:${node.rect.height}px;transform:translateY(${node.rect.top}px);`,
-});
-
 export default {
     data() {
         return {
-            visibleList: [], totalHeight: 0, itemCount: 0,
+            visibleKeys: [], visibleNodes: {}, totalHeight: 0, itemCount: 0,
             measureItem: null, layoutReady: false, layoutError: '',
         };
     },
@@ -67,7 +62,11 @@ export default {
         this.controller = createVirtualListController({
             mode: 'fixed', bufferScreens: 3, throttleMs: 150,
             onUpdate: (snapshot) => {
-                if (snapshot.visibleChanged) this.visibleList = snapshot.visibleList.map(withPositionStyle);
+                if (snapshot.visibleChanged) {
+                    const window = buildKeyedWindow(snapshot.visibleList);
+                    this.visibleNodes = window.visibleNodes;
+                    this.visibleKeys = window.visibleKeys;
+                }
                 this.totalHeight = snapshot.totalHeight;
             },
         });
@@ -87,7 +86,7 @@ export default {
             onError: (error) => {
                 this.layoutReady = false;
                 this.layoutError = error ? '布局测量失败，请点击重新测量。' : '';
-                if (error) { this.visibleList = []; this.totalHeight = 0; }
+                if (error) { this.visibleKeys = []; this.visibleNodes = {}; this.totalHeight = 0; }
             },
         });
     },
@@ -105,7 +104,7 @@ export default {
         },
         updateVisibleRow() {
             const top = Math.max(0, this.adapter.getLocalScrollTop());
-            const current = this.visibleList.find((node) => node.rect.bottom > top);
+            const current = this.visibleKeys.map((key) => this.visibleNodes[key]).find((node) => node.rect.bottom > top);
             if (!current) return;
             this.sourceRows = this.sourceRows.map((node) => node.key === current.key
                 ? { ...node, data: { text: `${node.data.text} · 已更新` } } : node);
@@ -130,8 +129,8 @@ export default {
     background: #fff; overflow: hidden; white-space: nowrap;
 }
 .measurement {
-    position: fixed; top: 0; left: 16px; right: 16px;
-    opacity: 0; pointer-events: none; height: 0; overflow: hidden;
+    position: absolute; left: 0; bottom: 100%; width: 100%;
+    visibility: hidden; pointer-events: none;
 }
 </style>
 ```

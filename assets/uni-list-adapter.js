@@ -13,6 +13,43 @@ const finite = (value, label) => {
     return value;
 };
 
+// Only letters, digits and underscores reach native data paths. Preserve the
+// controller's number/string distinction, including keys containing dots,
+// brackets, prototype names, Unicode or lone UTF-16 surrogates.
+export function encodeRenderKey(key) {
+    const kind = typeof key;
+    if (!((kind === 'string' && key.length > 0) || (kind === 'number' && Number.isFinite(key)))) {
+        throw new TypeError('key must be a nonempty string or finite number');
+    }
+    const value = String(key);
+    let encoded = kind === 'number' ? 'n_' : 's_';
+    for (let index = 0; index < value.length; index += 1) {
+        encoded += value.charCodeAt(index).toString(16).padStart(4, '0');
+    }
+    return encoded;
+}
+
+/** Keep ordering separate from keyed content in the native rendering layer. */
+export function buildKeyedWindow(visibleList) {
+    if (!Array.isArray(visibleList)) throw new TypeError('visibleList must be an array');
+    const visibleKeys = [];
+    const visibleNodes = {};
+    visibleList.forEach((node) => {
+        const renderKey = encodeRenderKey(node.key);
+        if (Object.prototype.hasOwnProperty.call(visibleNodes, renderKey)) {
+            throw new Error('Duplicate visible node key');
+        }
+        finite(node.rect && node.rect.top, 'node top');
+        positive(node.rect && node.rect.height, 'node height');
+        visibleKeys.push(renderKey);
+        visibleNodes[renderKey] = {
+            ...node,
+            style: `height:${node.rect.height}px;transform:translateY(${node.rect.top}px);`,
+        };
+    });
+    return { visibleKeys, visibleNodes };
+}
+
 const executeQuery = (query, scope, configure) => new Promise((resolve, reject) => {
     try {
         const batch = query().in(scope);
@@ -125,6 +162,17 @@ export function createUniListAdapter({
     const valid = (token) => !disposed && active && token === measureToken;
     const localTop = () => scrollTop - (layout ? layout.listTop : 0);
 
+    const updateScroll = (value, immediate) => {
+        if (!active || disposed || !Number.isFinite(value)) return false;
+        scrollTop = Math.max(0, value);
+        scrollVersion += 1;
+        if (layout && !measuring) {
+            if (immediate) controller.refresh(localTop());
+            else controller.handleScroll(localTop());
+        }
+        return true;
+    };
+
     const measure = async () => {
         if (!ready || !active || disposed) return false;
         const token = ++measureToken;
@@ -177,12 +225,9 @@ export function createUniListAdapter({
         onResize: measure,
         onHide: hide,
         measure,
-        handleScroll(value) {
-            if (!active || disposed || !Number.isFinite(value)) return;
-            scrollTop = Math.max(0, value);
-            scrollVersion += 1;
-            if (layout && !measuring) controller.handleScroll(localTop());
-        },
+        handleScroll(value) { return updateScroll(value, false); },
+        // Native offset reads must also cancel an older throttled window update.
+        syncScroll(value) { return updateScroll(value, true); },
         refreshData() {
             if (!active || disposed) return false;
             if (!layout || measuring) return measure();

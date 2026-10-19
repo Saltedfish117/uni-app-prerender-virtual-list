@@ -73,3 +73,5 @@ controller.replaceLayout(nodes, {
 完整布局提交前复制需要保持稳定的数据；不要原地修改已发布 DTO 再期待 Vue 自动更新。使用新节点调用 `replaceLayout`，或明确强制刷新。全量原始对象与选择集合由页面管理。
 
 pause 不能代替页面的异步失效检查：DOM 查询、跳转收尾、请求响应仍需要接入方的版本号与可见/销毁状态保护。重新测量失败时隐藏旧的虚拟内容，显示重试入口，避免展示与当前宽度不符的几何。
+
+`uni-list-adapter.js` 的 `buildKeyedWindow(visibleList)` 是视图转换，不改变本控制器快照接口；模板使用安全编码后的 key 循环、映射中的原始 key 处理操作。adapter 的 `syncScroll(actualRawTop)` 更新原始位置并立即调用 `refresh(localTop)`，取消旧节流。原生滚动校正与节点几何检查见 [空白诊断](scroll-blank-diagnosis.md)。

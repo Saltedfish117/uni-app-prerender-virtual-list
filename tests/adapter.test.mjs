@@ -249,3 +249,34 @@ test('resize replaces measured height and page origin together', async () => {
   assert.equal(h.controller.getSnapshot().start, 8);
   h.adapter.dispose();
 });
+
+test('native scroll synchronization updates raw/local positions and immediately refreshes the window', async () => {
+  const h = harness({ readLayout: async () => layout(200, 0) });
+  await activate(h.adapter);
+  h.adapter.handleScroll(300);
+  assert.equal(h.adapter.syncScroll(1200), true);
+  assert.equal(h.adapter.getScrollTop(), 1200);
+  assert.equal(h.adapter.getLocalScrollTop(), 1000);
+  assert.equal(h.controller.getSnapshot().start, 50);
+  h.adapter.syncScroll(0.1);
+  assert.equal(h.adapter.getLocalScrollTop(), -199.9);
+  assert.equal(h.controller.getSnapshot().visibleList.length, 0);
+  h.adapter.onHide();
+  assert.equal(h.adapter.syncScroll(900), false);
+  assert.equal(h.adapter.getScrollTop(), 0.1);
+  h.adapter.dispose();
+});
+
+test('native synchronization invalidates the offset captured by a pending measurement', async () => {
+  const waiting = deferred();
+  const h = harness({ readLayout: () => waiting.promise });
+  await h.adapter.onShow();
+  const pending = h.adapter.onReady();
+  await flush();
+  h.adapter.syncScroll(1000);
+  waiting.resolve(layout(200, 40));
+  assert.equal(await pending, true);
+  assert.equal(h.adapter.getScrollTop(), 1000);
+  assert.equal(h.controller.getSnapshot().start, 40);
+  h.adapter.dispose();
+});
